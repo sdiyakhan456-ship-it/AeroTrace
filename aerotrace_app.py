@@ -233,57 +233,57 @@ else:
     st.info("Pollution monitoring will be connected for this city.")
 
 
+
 # =====================================================
 # HOTSPOT DETECTION
 # =====================================================
 
 st.markdown("## 🔥 Hotspot Detection")
 
-if city == "Lucknow":
+hotspot_query = """
+SELECT *
+FROM AEROTRACE_DB.ANALYTICS.POLLUTION_HOTSPOTS
+ORDER BY AVG_POLLUTION DESC
+"""
 
-    hotspot_query = """
-    SELECT
-        hotspot_latitude,
-        hotspot_longitude,
-        pollutant,
-        avg_pollution,
-        measurements
-    FROM AEROTRACE_DB.ANALYTICS.POLLUTION_HOTSPOTS
-    ORDER BY avg_pollution DESC
-    LIMIT 10
-    """
+hotspot_data = run_query(hotspot_query)
 
-    hotspots = run_query(hotspot_query)
+if not hotspot_data.empty:
 
-    if not hotspots.empty:
+    if "AVG_POLLUTION" in hotspot_data.columns:
 
-        st.markdown("### 🔥 Top Pollution Hotspots")
+        chart_data = hotspot_data.copy()
 
-        chart_hotspots = hotspots.copy()
+        if "LATITUDE" in chart_data.columns and "LONGITUDE" in chart_data.columns:
+            chart_data["HOTSPOT"] = (
+                chart_data["LATITUDE"].round(3).astype(str)
+                + ", "
+                + chart_data["LONGITUDE"].round(3).astype(str)
+            )
+        else:
+            chart_data["HOTSPOT"] = (
+                "Hotspot " + (chart_data.index + 1).astype(str)
+            )
 
-        chart_hotspots["HOTSPOT"] = (
-            chart_hotspots["HOTSPOT_LATITUDE"].round(3).astype(str)
-            + ", "
-            + chart_hotspots["HOTSPOT_LONGITUDE"].round(3).astype(str)
+        chart_data = (
+            chart_data
+            .sort_values("AVG_POLLUTION", ascending=False)
+            .head(10)
         )
 
         st.bar_chart(
-            chart_hotspots.set_index("HOTSPOT")["AVG_POLLUTION"]
-        )
-
-        st.dataframe(
-            hotspots,
+            chart_data.set_index("HOTSPOT")["AVG_POLLUTION"],
             use_container_width=True
         )
 
-    else:
-        st.info("No pollution hotspots detected.")
+    st.dataframe(
+        hotspot_data,
+        use_container_width=True,
+        hide_index=True
+    )
 
 else:
-    st.info("Hotspot detection will be connected for this city.")
-
-
-# =====================================================
+    st.info("No hotspot data available.")# =====================================================
 # SPIKE DETECTION
 # =====================================================
 
