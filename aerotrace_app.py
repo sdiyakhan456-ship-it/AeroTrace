@@ -706,11 +706,7 @@ if city == "Lucknow":
             f"{latest_case['NO2']:.2f}"
         )
 
-        st.markdown("### 🔍 Case Study Finding")
-
-        st.info(
-            str(latest_case["CASE_STUDY_FINDING"])
-        )
+        
 
         st.markdown("### 🌬️ Environmental Context")
 
