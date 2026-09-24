@@ -651,8 +651,96 @@ if city == "Lucknow":
             "PM2.5 estimate is not available yet."
         )
 
-
 # =====================================================
+# POLLUTION SOURCE DETECTION CASE STUDY
+# =====================================================
+
+st.markdown("## 📚 Air Pollution Source Detection Case Study")
+
+st.caption(
+    "Combining air-quality, weather and road/traffic-context data "
+    "to identify pollution source clues."
+)
+
+if city == "Lucknow":
+
+    case_query = """
+    SELECT
+        DATETIME_LOCAL,
+        PM25,
+        PM10,
+        NO2,
+        CO,
+        SO2,
+        O3,
+        TEMPERATURE,
+        RELATIVE_HUMIDITY,
+        WIND_SPEED,
+        WIND_DIRECTION,
+        NEARBY_ROAD_FEATURES,
+        CASE_STUDY_FINDING
+    FROM AEROTRACE_DB.ANALYTICS.POLLUTION_CASE_STUDY
+    ORDER BY DATETIME_LOCAL DESC
+    """
+
+    case_data = run_query(case_query)
+
+    if not case_data.empty:
+
+        latest_case = case_data.iloc[0]
+
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric(
+            "PM2.5",
+            f"{latest_case['PM25']:.2f}"
+        )
+
+        c2.metric(
+            "PM10",
+            f"{latest_case['PM10']:.2f}"
+        )
+
+        c3.metric(
+            "NO₂",
+            f"{latest_case['NO2']:.2f}"
+        )
+
+        st.markdown("### 🔍 Case Study Finding")
+
+        st.info(
+            str(latest_case["CASE_STUDY_FINDING"])
+        )
+
+        st.markdown("### 🌬️ Environmental Context")
+
+        st.write(
+            f"Temperature: {latest_case['TEMPERATURE']} °C  |  "
+            f"Humidity: {latest_case['RELATIVE_HUMIDITY']} %  |  "
+            f"Wind Speed: {latest_case['WIND_SPEED']} m/s  |  "
+            f"Wind Direction: {latest_case['WIND_DIRECTION']}°"
+        )
+
+        st.markdown("### 🚗 Road / Traffic Context")
+
+        st.write(
+            f"Nearby mapped road features: "
+            f"**{latest_case['NEARBY_ROAD_FEATURES']}**"
+        )
+
+        st.dataframe(
+            case_data,
+            use_container_width=True
+        )
+
+        st.caption(
+            "Road features provide spatial context only. "
+            "They do not prove that traffic caused the observed pollution."
+        )
+
+    else:
+        st.info("No case-study data available.")
+    # =====================================================
 # ASK AEROTRACE
 # =====================================================
 
