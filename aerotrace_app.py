@@ -11,6 +11,7 @@ st.set_page_config(
 # =====================================================
 # SNOWFLAKE CONNECTION
 # =====================================================
+
 def get_connection():
     s = st.secrets["snowflake"]
 
@@ -34,11 +35,12 @@ def run_query(query):
     finally:
         conn.close()
 
+
 # =====================================================
 # HEADER
 # =====================================================
 
-st.title(" AeroTrace")
+st.title("🌍 AeroTrace")
 st.subheader("Air Pollution Source Detection & Risk Analysis")
 
 st.divider()
@@ -56,6 +58,84 @@ city = st.selectbox(
 )
 
 st.write("Selected Area:", city)
+
+
+# =====================================================
+# TOP KPI CARDS
+# =====================================================
+
+if city == "Lucknow":
+
+    latest_query = """
+    SELECT
+        POLLUTANT,
+        VALUE,
+        UNIT,
+        DATETIME_LOCAL
+    FROM AEROTRACE_DB.RAW.AEROTRACE_AIR_QUALITY_ENRICHED
+    WHERE LOWER(POLLUTANT) IN
+        ('pm25','pm10','no2','co','so2','o3')
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY LOWER(POLLUTANT)
+        ORDER BY DATETIME_LOCAL DESC
+    ) = 1
+    """
+
+    latest_data = run_query(latest_query)
+
+    def get_value(name):
+        row = latest_data[
+            latest_data["POLLUTANT"].str.lower() == name
+        ]
+
+        if not row.empty:
+            return row.iloc[0]["VALUE"]
+
+        return None
+
+    pm25 = get_value("pm25")
+    pm10 = get_value("pm10")
+    no2 = get_value("no2")
+
+    weather_latest_query = """
+    SELECT
+        wind_speed
+    FROM AEROTRACE_DB.RAW.AEROTRACE_WEATHER_HISTORICAL
+    ORDER BY datetime_local DESC
+    LIMIT 1
+    """
+
+    wind_data = run_query(weather_latest_query)
+
+    wind = None
+
+    if not wind_data.empty:
+        wind = wind_data.iloc[0]["WIND_SPEED"]
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric(
+        "🌫️ PM2.5",
+        f"{pm25:.2f}" if pm25 is not None else "N/A"
+    )
+
+    c2.metric(
+        "🌫️ PM10",
+        f"{pm10:.2f}" if pm10 is not None else "N/A"
+    )
+
+    c3.metric(
+        "🚗 NO₂",
+        f"{no2:.2f}" if no2 is not None else "N/A"
+    )
+
+    c4.metric(
+        "💨 Wind Speed",
+        f"{wind:.2f} m/s" if wind is not None else "N/A"
+    )
+
+
+st.divider()
 
 
 # =====================================================
@@ -98,8 +178,8 @@ else:
 
 st.divider()
 
+
 # =====================================================
-# CORE FEATURE 1
 # POLLUTION MONITORING
 # =====================================================
 
@@ -154,11 +234,10 @@ else:
 
 
 # =====================================================
-# CORE FEATURE 2
 # HOTSPOT DETECTION
 # =====================================================
 
-st.markdown("## 🏭 Hotspot Detection")
+st.markdown("## 🔥 Hotspot Detection")
 
 if city == "Lucknow":
 
@@ -178,7 +257,19 @@ if city == "Lucknow":
 
     if not hotspots.empty:
 
-        st.markdown("### Top Pollution Hotspots")
+        st.markdown("### 🔥 Top Pollution Hotspots")
+
+        chart_hotspots = hotspots.copy()
+
+        chart_hotspots["HOTSPOT"] = (
+            chart_hotspots["HOTSPOT_LATITUDE"].round(3).astype(str)
+            + ", "
+            + chart_hotspots["HOTSPOT_LONGITUDE"].round(3).astype(str)
+        )
+
+        st.bar_chart(
+            chart_hotspots.set_index("HOTSPOT")["AVG_POLLUTION"]
+        )
 
         st.dataframe(
             hotspots,
@@ -193,7 +284,6 @@ else:
 
 
 # =====================================================
-# CORE FEATURE 3
 # SPIKE DETECTION
 # =====================================================
 
@@ -219,7 +309,7 @@ if city == "Lucknow":
 
     if not spikes.empty:
 
-        st.markdown("### Detected Pollution Spikes")
+        st.markdown("### ⚡ Detected Pollution Spikes")
 
         st.dataframe(
             spikes,
@@ -234,7 +324,6 @@ else:
 
 
 # =====================================================
-# CORE FEATURE 4
 # SOURCE ANALYSIS
 # =====================================================
 
@@ -259,7 +348,16 @@ if city == "Lucknow":
 
     if not sources.empty:
 
-        st.markdown("###  Nearby Pollution Source Context")
+        st.markdown("### 🔎 Nearby Source Categories")
+
+        source_chart = (
+            sources
+            .groupby("FEATURE_TYPE")["AVG_POLLUTION"]
+            .mean()
+            .sort_values(ascending=False)
+        )
+
+        st.bar_chart(source_chart)
 
         st.dataframe(
             sources,
@@ -268,8 +366,7 @@ if city == "Lucknow":
 
         st.caption(
             "Source categories represent nearby mapped features "
-            "and should be interpreted as contextual signals, "
-            "not proof of causation."
+            "and spatial clues. They do not establish causation."
         )
 
     else:
@@ -280,7 +377,6 @@ else:
 
 
 # =====================================================
-# CORE FEATURE 5
 # WEATHER & WIND
 # =====================================================
 
@@ -298,15 +394,14 @@ if city == "Lucknow":
         wind_direction,
         surface_pressure
     FROM AEROTRACE_DB.RAW.AEROTRACE_WEATHER_HISTORICAL
-    ORDER BY datetime_local DESC
-    LIMIT 10
+    ORDER BY datetime_local ASC
     """
 
     weather = run_query(weather_query)
 
     if not weather.empty:
 
-        latest = weather.iloc[0]
+        latest = weather.iloc[-1]
 
         c1, c2, c3, c4 = st.columns(4)
 
@@ -330,8 +425,26 @@ if city == "Lucknow":
             f"{latest['WIND_DIRECTION']}°"
         )
 
+        st.markdown("### 🌬️ Weather Trend")
+
+        weather_chart = weather[
+            [
+                "DATETIME_LOCAL",
+                "WIND_SPEED",
+                "TEMPERATURE"
+            ]
+        ].copy()
+
+        weather_chart = weather_chart.set_index(
+            "DATETIME_LOCAL"
+        )
+
+        st.line_chart(
+            weather_chart
+        )
+
         st.dataframe(
-            weather,
+            weather.tail(10),
             use_container_width=True
         )
 
@@ -343,7 +456,6 @@ else:
 
 
 # =====================================================
-# USP 1
 # POPULATION EXPOSURE
 # =====================================================
 
@@ -384,7 +496,6 @@ else:
 
 
 # =====================================================
-# USP 2
 # SIMILAR EVENT DETECTION
 # =====================================================
 
@@ -411,7 +522,7 @@ if city == "Lucknow":
 
     if not events.empty:
 
-        st.markdown("### Highest Pollution Event Signatures")
+        st.markdown("### 🔍 Historical Event Signatures")
 
         st.dataframe(
             events,
@@ -419,8 +530,8 @@ if city == "Lucknow":
         )
 
         st.caption(
-            "These signatures can be used as a basis for comparing "
-            "future pollution events with historical patterns."
+            "These signatures can be used to compare future pollution "
+            "events with historical patterns."
         )
 
     else:
@@ -431,7 +542,6 @@ else:
 
 
 # =====================================================
-# USP 3
 # SMART ALERTS + RISK
 # =====================================================
 
@@ -467,7 +577,16 @@ if city == "Lucknow":
 
     if not risks.empty:
 
-        st.markdown("###  Active Risk Signals")
+        st.markdown("### 🚨 Risk Distribution")
+
+        risk_counts = (
+            risks["RISK_LEVEL"]
+            .value_counts()
+        )
+
+        st.bar_chart(risk_counts)
+
+        st.markdown("### Active Risk Signals")
 
         st.dataframe(
             risks,
@@ -475,9 +594,9 @@ if city == "Lucknow":
         )
 
         st.caption(
-            "Risk level is a data-driven signal based on pollution "
-            "increase and wind conditions; it is not a medical or "
-            "public-health risk assessment."
+            "Risk level is a data-driven monitoring signal based on "
+            "pollution and environmental context. It is not a medical "
+            "or public-health risk assessment."
         )
 
     else:
@@ -486,11 +605,58 @@ if city == "Lucknow":
 else:
     st.info("Smart alerts will be connected for this city.")
 
+
+# =====================================================
+# PM2.5 SHORT-TERM ESTIMATE
+# =====================================================
+
+st.markdown("## 🔮 PM2.5 Short-Term Estimate")
+
+if city == "Lucknow":
+
+    forecast_query = """
+    SELECT
+        FORECAST_BASE_TIME,
+        CURRENT_PM25,
+        AVG_PM25,
+        PREDICTED_PM25,
+        FORECAST_NOTE
+    FROM AEROTRACE_DB.ANALYTICS.PM25_FORECAST
+    ORDER BY FORECAST_BASE_TIME DESC
+    LIMIT 1
+    """
+
+    try:
+
+        forecast = run_query(forecast_query)
+
+        if not forecast.empty:
+
+            predicted = forecast.iloc[0]["PREDICTED_PM25"]
+
+            st.metric(
+                "🔮 Estimated Next PM2.5",
+                f"{predicted} µg/m³"
+            )
+
+            st.caption(
+                forecast.iloc[0]["FORECAST_NOTE"]
+            )
+
+        else:
+            st.info("No PM2.5 estimate available.")
+
+    except Exception:
+        st.info(
+            "PM2.5 estimate is not available yet."
+        )
+
+
 # =====================================================
 # ASK AEROTRACE
 # =====================================================
 
-st.markdown("## 🤖 AeroTrace AI Analyst")
+st.markdown("## 🤖 Ask AeroTrace")
 
 if city == "Lucknow":
 
@@ -507,14 +673,17 @@ if city == "Lucknow":
 
     if not ai_data.empty:
 
-        st.markdown("###  AI-Generated Pollution Analysis")
+        st.markdown("### 🧠 AI-Generated Pollution Analysis")
 
-        ai_text = str(ai_data.iloc[0]["AI_INSIGHT"])
+        ai_text = str(
+            ai_data.iloc[0]["AI_INSIGHT"]
+        )
 
-        # Convert escaped newlines into real line breaks
-        ai_text = ai_text.replace("\\n", "\n")
+        ai_text = ai_text.replace(
+            "\\n",
+            "\n"
+        )
 
-        # Remove unwanted outer quotation marks
         ai_text = ai_text.strip().strip('"')
 
         st.markdown(ai_text)
@@ -529,7 +698,11 @@ if city == "Lucknow":
         st.info("No AI insight available.")
 
 else:
-    st.info("AI analysis is currently connected to the Lucknow dataset.")
+    st.info(
+        "AI analysis is currently connected to the Lucknow dataset."
+    )
+
+
 # =====================================================
 # FOOTER
 # =====================================================
